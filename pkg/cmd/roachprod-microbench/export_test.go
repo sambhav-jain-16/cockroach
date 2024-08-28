@@ -56,7 +56,7 @@ func TestSanitize(t *testing.T) {
 	}
 	for _, tc := range testCases {
 		t.Run(tc.input, func(t *testing.T) {
-			require.Equal(t, tc.output, sanitize(tc.input))
+			require.Equal(t, tc.output, Sanitize(tc.input))
 		})
 	}
 }

@@ -105,7 +105,7 @@ func registerDiskBandwidthOverload(r registry.Registry) {
 				t.Status(fmt.Sprintf("starting foreground kv workload thread (<%s)", time.Minute))
 				dur := " --duration=" + duration.String()
 				url := fmt.Sprintf(" {pgurl%s}", c.CRDBNodes())
-				cmd := "./cockroach workload run kv --histograms=perf/stats.json --concurrency=2 " +
+				cmd := "./cockroach workload run kv" + roachtestutil.GetWorkloadHistogramArgsString(t, c) + " --concurrency=2 " +
 					"--splits=1000 --read-percent=50 --min-block-bytes=4096 --max-block-bytes=4096 " +
 					"--txn-qos='regular' --tolerate-errors" + foregroundDB + dur + url
 				c.Run(ctx, option.WithNodes(c.WorkloadNode()), cmd)
@@ -117,7 +117,7 @@ func registerDiskBandwidthOverload(r registry.Registry) {
 				t.Status(fmt.Sprintf("starting background kv workload thread (<%s)", time.Minute))
 				dur := " --duration=" + duration.String()
 				url := fmt.Sprintf(" {pgurl%s}", c.CRDBNodes())
-				cmd := "./cockroach workload run kv --histograms=perf/stats.json --concurrency=1024 " +
+				cmd := "./cockroach workload run kv " + roachtestutil.GetWorkloadHistogramArgsString(t, c) + " --concurrency=1024 " +
 					"--read-percent=0 --min-block-bytes=4096 --max-block-bytes=4096 " +
 					"--txn-qos='background' --tolerate-errors" + backgroundDB + dur + url
 				c.Run(ctx, option.WithNodes(c.WorkloadNode()), cmd)

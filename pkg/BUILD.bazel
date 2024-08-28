@@ -1190,6 +1190,7 @@ GO_TARGETS = [
     "//pkg/cmd/roachprod-microbench/cluster:cluster_test",
     "//pkg/cmd/roachprod-microbench/google:google",
     "//pkg/cmd/roachprod-microbench/model:model",
+    "//pkg/cmd/roachprod-microbench/util:util",
     "//pkg/cmd/roachprod-microbench:roachprod-microbench",
     "//pkg/cmd/roachprod-microbench:roachprod-microbench_lib",
     "//pkg/cmd/roachprod-microbench:roachprod-microbench_test",

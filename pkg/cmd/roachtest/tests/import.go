@@ -143,7 +143,10 @@ func registerImportTPCC(r registry.Registry) {
 			m.Go(hc.Runner)
 		}
 
-		tick, perfBuf := initBulkJobPerfArtifacts(testName, timeout)
+		exporter := roachtestutil.CreaterWorkloadHistogramExporter(t, c)
+		defer exporter.Close(nil)
+
+		tick, perfBuf := initBulkJobPerfArtifacts(timeout, t, exporter)
 		workloadStr := `./cockroach workload fixtures import tpcc --warehouses=%d --csv-server='http://localhost:8081' {pgurl:1}`
 		m.Go(func(ctx context.Context) error {
 			defer dul.Done()
@@ -162,9 +165,13 @@ func registerImportTPCC(r registry.Registry) {
 			c.Run(ctx, option.WithNodes(c.Node(1)), cmd)
 			tick()
 
+			destFileName := "stats.json"
+			if t.ExportOpenmetrics() {
+				destFileName = "stats.txt"
+			}
 			// Upload the perf artifacts to any one of the nodes so that the test
 			// runner copies it into an appropriate directory path.
-			dest := filepath.Join(t.PerfArtifactsDir(), "stats.json")
+			dest := filepath.Join(t.PerfArtifactsDir(), destFileName)
 			if err := c.RunE(ctx, option.WithNodes(c.Node(1)), "mkdir -p "+filepath.Dir(dest)); err != nil {
 				log.Errorf(ctx, "failed to create perf dir: %+v", err)
 			}
@@ -244,7 +251,10 @@ func registerImportTPCH(r registry.Registry) {
 			EncryptionSupport: registry.EncryptionMetamorphic,
 			Leases:            registry.MetamorphicLeases,
 			Run: func(ctx context.Context, t test.Test, c cluster.Cluster) {
-				tick, perfBuf := initBulkJobPerfArtifacts(t.Name(), item.timeout)
+				exporter := roachtestutil.CreaterWorkloadHistogramExporter(t, c)
+				defer exporter.Close(nil)
+
+				tick, perfBuf := initBulkJobPerfArtifacts(item.timeout, t, exporter)
 
 				c.Start(ctx, t.L(), option.DefaultStartOpts(), install.MakeClusterSettings())
 				conn := c.Conn(ctx, t.L(), 1)
@@ -329,9 +339,13 @@ func registerImportTPCH(r registry.Registry) {
 					}
 					tick()
 
+					destFileName := "stats.json"
+					if t.ExportOpenmetrics() {
+						destFileName = "stats.txt"
+					}
 					// Upload the perf artifacts to any one of the nodes so that the test
 					// runner copies it into an appropriate directory path.
-					dest := filepath.Join(t.PerfArtifactsDir(), "stats.json")
+					dest := filepath.Join(t.PerfArtifactsDir(), destFileName)
 					if err := c.RunE(ctx, option.WithNodes(c.Node(1)), "mkdir -p "+filepath.Dir(dest)); err != nil {
 						log.Errorf(ctx, "failed to create perf dir: %+v", err)
 					}

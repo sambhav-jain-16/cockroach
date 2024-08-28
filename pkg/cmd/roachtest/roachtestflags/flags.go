@@ -318,6 +318,12 @@ var (
 		Usage: `The port on which to serve the HTTP interface`,
 	})
 
+	ExportOpenmetrics bool = false
+	_                      = registerRunFlag(&ExportOpenmetrics, FlagInfo{
+		Name:  "export-openmetrics",
+		Usage: `flag to denote if roachtests should export openmetrics file for perf metrics `,
+	})
+
 	DatadogSite string = "us5.datadoghq.com"
 	_                  = registerRunOpsFlag(&DatadogSite, FlagInfo{
 		Name:  "datadog-site",

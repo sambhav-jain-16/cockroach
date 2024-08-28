@@ -14,13 +14,17 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"path/filepath"
 	"time"
 
+	"github.com/cockroachdb/cockroach/pkg/cmd/roachprod-microbench/util"
 	"github.com/cockroachdb/cockroach/pkg/cmd/roachtest/cluster"
 	"github.com/cockroachdb/cockroach/pkg/cmd/roachtest/option"
+	"github.com/cockroachdb/cockroach/pkg/cmd/roachtest/registry"
 	"github.com/cockroachdb/cockroach/pkg/cmd/roachtest/test"
 	"github.com/cockroachdb/cockroach/pkg/roachprod/logger"
+	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
 	"github.com/cockroachdb/errors"
 )
 
@@ -99,8 +103,18 @@ type ClusterStatRun struct {
 }
 
 // serializeReport serializes the passed in statistics into a roachperf
-// parseable performance artifact format.
+// parseable performance artifact format or openmetrics format which is decided by isOpenMetrics parameter
 func (r *ClusterStatRun) SerializeOutRun(
+	ctx context.Context, t test.Test, c cluster.Cluster, isOpenMetrics bool,
+) error {
+	if isOpenMetrics {
+		return r.serializeOpenmetricsOutRun(ctx, t, c)
+	}
+	return r.serializeStandardOutRun(ctx, t, c)
+
+}
+
+func (r *ClusterStatRun) serializeStandardOutRun(
 	ctx context.Context, t test.Test, c cluster.Cluster,
 ) error {
 	report, err := serializeReport(*r)
@@ -108,6 +122,60 @@ func (r *ClusterStatRun) SerializeOutRun(
 		return errors.Wrap(err, "failed to serialize perf artifacts")
 	}
 	return writeOutRoachPerf(ctx, t, c, report)
+}
+
+func (r *ClusterStatRun) serializeOpenmetricsOutRun(
+	ctx context.Context, t test.Test, c cluster.Cluster,
+) error {
+
+	labelString := GetDefaultOpenmetricsLabelString(t, c)
+	report, err := serializeOpenmetricsReport(*r, &labelString)
+	if err != nil {
+		return errors.Wrap(err, "failed to serialize perf artifacts")
+	}
+	return writeOutOpenmetricsFile(ctx, t, c, report)
+}
+
+func serializeOpenmetricsReport(r ClusterStatRun, labelString *string) (*bytes.Buffer, error) {
+	var buffer bytes.Buffer
+
+	// Emit summary metrics from Total
+	for key, value := range r.Total {
+		buffer.WriteString(fmt.Sprintf("# TYPE %s gauge\n", util.Sanitize(key)))
+		buffer.WriteString(fmt.Sprintf("%s{%s} %f %d\n", util.Sanitize(key), *labelString, value, timeutil.Now().UTC().Unix()))
+	}
+
+	// Emit histogram metrics from Stats
+	for _, stat := range r.Stats {
+		buffer.WriteString(fmt.Sprintf("# TYPE %s gauge\n", util.Sanitize(stat.Tag)))
+		for i, timestamp := range stat.Time {
+			t := time.Unix(0, timestamp)
+			buffer.WriteString(
+				fmt.Sprintf("%s{%s,agg_tag=\"%s\"} %f %d\n",
+					util.Sanitize(stat.Tag),
+					*labelString,
+					util.Sanitize(stat.AggTag),
+					stat.Value[i],
+					t.UTC().Unix()))
+		}
+		for tag, values := range stat.Tagged {
+			for i, timestamp := range stat.Time {
+				t := time.Unix(0, timestamp)
+				buffer.WriteString(
+					fmt.Sprintf("%s{%s,tag=\"%s\",agg_tag=\"%s\"} %f %d\n",
+						util.Sanitize(stat.Tag),
+						*labelString,
+						tag,
+						util.Sanitize(stat.AggTag),
+						values[i],
+						t.UTC().Unix()))
+			}
+		}
+	}
+
+	buffer.WriteString("# EOF\n")
+
+	return &buffer, nil
 }
 
 // createReport returns a ClusterStatRun struct that encompases the results of
@@ -156,7 +224,7 @@ func (cs *clusterStatCollector) Export(
 
 	testRun := createReport(summaries, summaryValues)
 	if !dryRun {
-		err = testRun.SerializeOutRun(ctx, t, c)
+		err = testRun.SerializeOutRun(ctx, t, c, t.ExportOpenmetrics())
 	}
 	return testRun, err
 }
@@ -166,8 +234,21 @@ func (cs *clusterStatCollector) Export(
 func writeOutRoachPerf(
 	ctx context.Context, t test.Test, c cluster.Cluster, buffer *bytes.Buffer,
 ) error {
-	l := t.L()
 	dest := filepath.Join(t.PerfArtifactsDir(), "stats.json")
+	return writeStatsBufferToFile(ctx, t, c, buffer, dest)
+}
+
+func writeOutOpenmetricsFile(
+	ctx context.Context, t test.Test, c cluster.Cluster, buffer *bytes.Buffer,
+) error {
+	dest := filepath.Join(t.PerfArtifactsDir(), "openmetrics.om")
+	return writeStatsBufferToFile(ctx, t, c, buffer, dest)
+}
+
+func writeStatsBufferToFile(
+	ctx context.Context, t test.Test, c cluster.Cluster, buffer *bytes.Buffer, dest string,
+) error {
+	l := t.L()
 	if err := c.RunE(ctx, option.WithNodes(c.Node(1)), "mkdir -p "+filepath.Dir(dest)); err != nil {
 		l.ErrorfCtx(ctx, "failed to create perf dir: %+v", err)
 		return err
@@ -333,4 +414,17 @@ func (cs *clusterStatCollector) getStatSummary(
 		}
 	}
 	return ret, nil
+}
+
+func GetDefaultOpenmetricsLabelString(t test.Test, c cluster.Cluster) string {
+	return util.LabelMapToString(GetDefaultOpenmetricsLabelMap(t, c))
+}
+
+func GetDefaultOpenmetricsLabelMap(t test.Test, c cluster.Cluster) map[string]string {
+	return map[string]string{
+		"test":  t.Name(),
+		"cloud": c.Cloud().String(),
+		"owner": string(t.Spec().(*registry.TestSpec).Owner),
+		"suite": t.Spec().(*registry.TestSpec).Suites.String(),
+	}
 }

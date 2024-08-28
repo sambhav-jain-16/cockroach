@@ -14,6 +14,7 @@ import (
 	"log"
 	"os"
 
+	"github.com/cockroachdb/cockroach/pkg/cmd/roachprod-microbench/util"
 	roachprodConfig "github.com/cockroachdb/cockroach/pkg/roachprod/config"
 	"github.com/cockroachdb/cockroach/pkg/roachprod/ssh"
 	"github.com/cockroachdb/cockroach/pkg/util/timeutil"
@@ -82,7 +83,7 @@ func makeCleanCommand() *cobra.Command {
 func makeRunCommand() *cobra.Command {
 	config := defaultExecutorConfig()
 	runCmdFunc := func(cmd *cobra.Command, commandLine []string) error {
-		args, testArgs := splitArgsAtDash(cmd, commandLine)
+		args, testArgs := util.SplitArgsAtDash(cmd, commandLine)
 		config.cluster = args[0]
 		config.testArgs = testArgs
 		e, err := newExecutor(config)

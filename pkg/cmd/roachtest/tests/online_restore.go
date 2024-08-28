@@ -427,7 +427,7 @@ func exportStats(ctx context.Context, rd restoreDriver, restoreStats restoreStat
 			exportingStats.Stats[latencyQueryKey].Value[i] = 0
 		}
 	}
-	if err := exportingStats.SerializeOutRun(ctx, rd.t, rd.c); err != nil {
+	if err := exportingStats.SerializeOutRun(ctx, rd.t, rd.c, false); err != nil {
 		return errors.Wrap(err, "failed to export stats")
 	}
 	return nil

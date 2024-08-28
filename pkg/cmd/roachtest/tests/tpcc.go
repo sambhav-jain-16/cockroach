@@ -22,6 +22,7 @@ import (
 	"time"
 
 	"github.com/cockroachdb/cockroach/pkg/cmd/roachtest/cluster"
+	"github.com/cockroachdb/cockroach/pkg/cmd/roachtest/clusterstats"
 	"github.com/cockroachdb/cockroach/pkg/cmd/roachtest/option"
 	"github.com/cockroachdb/cockroach/pkg/cmd/roachtest/registry"
 	"github.com/cockroachdb/cockroach/pkg/cmd/roachtest/roachtestutil"
@@ -300,10 +301,15 @@ func runTPCC(
 				i, opts.Warehouses, rampDur, opts.Duration, pgURLs[i], time.Minute)
 
 			histogramsPath := fmt.Sprintf("%s/%sstats.json", t.PerfArtifactsDir(), statsPrefix)
+			if t.ExportOpenmetrics() {
+				histogramsPath = fmt.Sprintf("%s/%sstats.txt", t.PerfArtifactsDir(), statsPrefix)
+			}
 			cmd := roachtestutil.NewCommand("%s workload run %s", test.DefaultCockroachPath, opts.getWorkloadCmd()).
 				MaybeFlag(opts.DB != "", "db", opts.DB).
 				Flag("warehouses", opts.Warehouses).
 				MaybeFlag(!opts.DisableHistogram, "histograms", histogramsPath).
+				MaybeFlag(!t.ExportOpenmetrics(), "histogram-export-format", "openmetrics").
+				MaybeFlag(!t.ExportOpenmetrics(), "openmetrics-labels", clusterstats.GetDefaultOpenmetricsLabelString(t, c)).
 				Flag("ramp", rampDur).
 				Flag("duration", opts.Duration).
 				Flag("prometheus-port", workloadInstances[i].prometheusPort).
