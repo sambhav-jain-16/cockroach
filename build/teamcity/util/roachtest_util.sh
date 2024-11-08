@@ -24,13 +24,21 @@ source  $root/build/teamcity/util/roachtest_arch_util.sh
 # code run best).
 stats_dir="$(date +"%Y%m%d")-${TC_BUILD_ID}"
 
+stats_file_name="stats.json"
+if [ "$EXPORT_OPENMETRICS" = "true" ]; then
+  export ROACHTEST_BUCKET="cockroach-testeng-metrics/omloader/incoming"
+  stats_file_name="stats.om"
+fi
+
 # Set up a function we'll invoke at the end.
 function upload_stats {
   if tc_release_branch; then
-      bucket="${ROACHTEST_BUCKET:-cockroach-nightly-${CLOUD}}"
+      bucket="${ROACHTEST_BUCKET:-cockroach-nightly-${CLOUD}}}"
       if [[ "${CLOUD}" == "gce" ]]; then
           # GCE, having been there first, gets an exemption.
-          bucket="cockroach-nightly"
+          if [ "$EXPORT_OPENMETRICS" != "true" ]; then
+            bucket="cockroach-nightly"
+          fi
       fi
 
       branch=$(tc_build_branch)
@@ -66,7 +74,7 @@ function upload_stats {
             fi
             gsutil cp "${f}" "gs://${bucket}/${artifacts_dir}/${stats_dir}/${f}"
           fi
-        done <<< "$(find . -name stats.json | sed 's/^\.\///')")
+        done <<< "$(find . -name $stats_file_name | sed 's/^\.\///')")
   fi
 }
 
